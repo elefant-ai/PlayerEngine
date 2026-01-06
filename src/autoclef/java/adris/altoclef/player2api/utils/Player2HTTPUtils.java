@@ -27,12 +27,17 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 
 public class Player2HTTPUtils {
     private static final Logger LOGGER = LogManager.getLogger();
 
     private static final String WEB_API_URL = "https://api.player2.game";
+
+    // Track players who have already attempted reauth for 402 errors (retry once only)
+    private static final Set<AuthKey> energyRetryAttempted = ConcurrentHashMap.newKeySet();
 
     public static Map<String, JsonElement> sendRequest(Player player, String clientId, String endpoint, boolean postRequest, JsonObject requestBody) throws Exception{
         String token = awaitToken(player, clientId);
@@ -41,11 +46,22 @@ public class Player2HTTPUtils {
         try {
             return HTTPUtils.sendRequest(WEB_API_URL, endpoint, postRequest, requestBody, headers);
         } catch (HttpApiException e) {
+            AuthKey authKey = new AuthKey(player.getUUID(), clientId);
+
             if (e.getStatusCode() == 401) {
-                LOGGER.warn("Received 401 Unauthorized for {}. Invalidating token.", new AuthKey(player.getUUID(), clientId));
+                LOGGER.warn("Received 401 Unauthorized for {}. Invalidating token.", authKey);
                 AuthenticationManager.getInstance().invalidateToken(player, clientId);
                 throw new Exception("Token expired, re-authentication started.", e);
             }
+
+            // Handle HTTP 402 "insufficient_credits" (out of energy) - retry auth once
+            if (e.getStatusCode() == 402 && !energyRetryAttempted.contains(authKey)) {
+                LOGGER.warn("Received 402 insufficient credits for {}. Attempting reauth.", authKey);
+                energyRetryAttempted.add(authKey);
+                AuthenticationManager.getInstance().invalidateToken(player, clientId);
+                throw new Exception("Insufficient AI power, re-authentication started.", e);
+            }
+
             throw e;
         }
     }

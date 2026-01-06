@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
+import adris.altoclef.player2api.auth.TokenStorage;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -45,6 +46,7 @@ public final class PlayerEngine implements ModInitializer {
    }
 
    public void onInitialize() {
+      TokenStorage.clearAllTokens();  // Force reauth on game start
       DefaultCommands.registerAll();
       Registry.register(BuiltInRegistries.ENTITY_TYPE, id("fishing_bobber"), FISHING_BOBBER);
    }
